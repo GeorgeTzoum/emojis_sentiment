@@ -1,0 +1,103 @@
+require(twitteR)
+username='ParisHilton'
+#the most tweets we can bring back from a user timeline is the most recent 3600...
+mht<-some_tweets_noret
+mht=userTimeline(username,n=300)
+tw.df=twListToDF(mht)
+head(mht,10)
+length(mht)
+#As I've done in previous scripts, pull out the names of folk who have been "old-fashioned RTd"...
+require(stringr)
+trim <- function (x) sub('@','',x)
+
+tw.df$rt=sapply(tw.df$text,function(tweet) trim(str_match(tweet,"^RT (@[[:alnum:]_]*)")[2]))
+tw.df$rtt=sapply(tw.df$rt,function(rt) if (is.na(rt)) 'T' else 'RT')
+
+##################### continue only with the text from tweet##################
+some_tweets_text<-sapply(mht, function(x) x$getText())
+tweets_encod <- data.frame(text = iconv(some_tweets_text, "latin1", "ASCII", "byte"),stringsAsFactors = FALSE)# correct encoding#
+tweets_encod <- sapply(tweets_encod, function (x) gsub("^\\s+|\\s+$", "", x))# remove whitespace#
+###### emoticons ##############################################################
+setwd("C:/Users/Hipsterinos/Desktop/3.twitter") #emoticons decoder or replace straight from url# 
+b<-read.csv2("emDict1.csv",header=T)
+attach(b);R.encoding<-(as.character(R.encoding))
+head(tweets_encod,10)
+
+xg <- getURL("https://raw.githubusercontent.com/today-is-a-good-day/Emoticons/master/emDict.csv")
+yg <- read.csv(text = xg)
+
+yg1 <- data.frame(lapply(read.csv(text = xg), as.character), stringsAsFactors=FALSE)
+
+yg1
+
+yg2<-as.data.frame(str_split_fixed(yg1[,1],";",4))
+names(yg2)[1]<-paste("Description");names(yg2)[2]<-paste("Native");names(yg2)[3]<-paste("Bytes");names(yg2)[4]<-paste("R.encoding")
+b<-yg2
+attach(b);R.encoding<-(as.character(R.encoding))
+b
+
+
+############################################################################### Core code########################
+g<-lapply(R.encoding, function (x) j<-grepl(x,tweets_encod))###!!!!!!!!!!!!!!!!!!!!!#######
+table(unlist(g))# how many emoticons are there#
+ff<-sapply(g, function (x) k<-(which(as.character(unlist(x))==TRUE)))# creates a list of as many lists as the emoticons that conatain the position of the tweet# 
+ff1<-as.data.frame(table(unlist(ff)))#how many emoticons occur in each tweet#           #rows tweets#
+ffratio<-round(nrow(ff1)/length(mht),2)
+print(paste0("The number of tweets containing emojis is: ",nrow(ff1) ))
+print(paste0("The percentage of tweets containing emojis is: ",ffratio ))
+#############################################################################
+
+fff1<-cbind(c(1:842),as.data.frame(as.matrix(ff)));names(fff1)<-c("emoji","tweet")        # rows emojis#
+# I have created a data frame that has 2 columns and emoticons rows, 1st column containes the emoticons position and second column is a list with tweets#
+
+indx <- sapply(fff1$tweet, length)
+res <- as.data.frame(do.call(rbind,lapply(fff1$tweet, `length<-`,max(indx)))) ###  all emojis attached to  tweets or not ###
+gg<-cbind(c(1:842),res) #attach the emoji number-position#
+names(gg)<-c("emoji","twt")                                          
+ggg<-gg[!(is.na(gg$twt) | gg$twt==""), ] # only emojis and tweets containing them#
+################################################################################
+####download staff from internet###
+#assign sentiment scores from the internet to emojis
+
+#http://kt.ijs.si/data/Emoji_sentiment_ranking
+
+### reach emojis sentiment from   http://kt.ijs.si/data/Emoji_sentiment_ranking/ #####
+library(XML)
+theurl <- "http://kt.ijs.si/data/Emoji_sentiment_ranking/"
+tables <- readHTMLTable(theurl)
+n.rows <- unlist(lapply(tables, function(t) dim(t)[1]))  
+x<-tables[[which.max(n.rows)]]
+attach(x);colnames(x)[11] <- "unicode_name"
+
+# Use unicode names to match sets  both columns as characters#
+D<-as.character(Description);U<-as.character(unicode_name)
+m<-match(U,D)
+
+#df of emojis and probabilities 751 rows( not 842!)
+emoji<-cbind(m,x)
+#change names of df#
+colnames(emoji)[7] <- "Negative";colnames(emoji)[8] <- "Neutral";colnames(emoji)[9] <- "Positive";colnames(emoji)[12] <- "Description"
+attach(emoji)
+
+##############################################################################################################################
+
+joined = cbind(ggg[match(emoji$m, ggg$emoji),], emoji) # after matching the new df is smaller than ggg, consists only emojis assigned to probabilities#
+# key  emojis (same as m) in joined#
+library(plyr)
+exporttab <- merge(x=ggg,y=emoji,by.x='emoji',by.y='m')
+
+attach(exporttab)
+names(exporttab)
+
+dat2a <- data.frame(exporttab[1], stack(exporttab[2:max(indx)]),exporttab[(ncol(exporttab)-7):(ncol(exporttab)-3)])# :length of the most frequent emoji instead of 5#
+#dat21a <- data.frame(exporttab[1], exporttab[2:24],exporttab[30:33])# :length of the most frequent emoji instead of 5#
+
+#######################################################################################################
+library(reshape)
+sss<-cast(dat2a, Positive ~ values ) #pivot table names position of tweet  
+##############################################################################################################################
+
+ss<-as.data.frame(sss[,-1])
+
+indx1 <- sapply(ss, is.factor);ss[indx1] <- lapply(ss[indx1], function(x) as.numeric(as.character(x)))
+sapply(ss, function(cl) list(means=mean(cl,na.rm=TRUE), sds=sd(cl,na.rm=TRUE)))
