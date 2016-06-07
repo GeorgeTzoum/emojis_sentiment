@@ -1,17 +1,9 @@
 require(twitteR)
 username='ParisHilton'
-#the most tweets we can bring back from a user timeline is the most recent 3600...
 mht<-some_tweets_noret
 mht=userTimeline(username,n=300)
-tw.df=twListToDF(mht)
 head(mht,10)
 length(mht)
-#As I've done in previous scripts, pull out the names of folk who have been "old-fashioned RTd"...
-require(stringr)
-trim <- function (x) sub('@','',x)
-
-tw.df$rt=sapply(tw.df$text,function(tweet) trim(str_match(tweet,"^RT (@[[:alnum:]_]*)")[2]))
-tw.df$rtt=sapply(tw.df$rt,function(rt) if (is.na(rt)) 'T' else 'RT')
 
 ##################### continue only with the text from tweet##################
 some_tweets_text<-sapply(mht, function(x) x$getText())
